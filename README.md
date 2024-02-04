@@ -19,7 +19,7 @@ To run the game, follow the code below:
 game = Snake()
 game.play()
 ```
-Or just directly execute the WinSnake.py file.
+Or just directly execute the "WinSnake.py" file.
 
 The code above uses the default game rules. If you want to change it go to the
 topic "Settings the Game"
@@ -41,6 +41,8 @@ Installation parameters in Snake():
 `game_over`: Set whether the game can be game over [default: True]
 
 `save_high_score`: Set save the highscore in the file "SNAKE-SCORE.hi" [default: True]
+
+`show_score_board`: Set to display the scoreboard [default: True]
 
 Exit Codes
 ----------
