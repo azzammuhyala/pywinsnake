@@ -429,6 +429,8 @@ if __name__ == '__main__':
             if bm:
                 bmit = input('\nType moving bot show:\n  1: wasd\n  2: ulds\n[\033[36mCHOOSE\033[0m] > ')
                 bmt  = input('\nBot move type:\n  1: neat\n  2: algorithm\n[\033[36mCHOOSE\033[0m] > ')
+            else:
+                bmit, bmt = '1', '1'
             game_snake = Snake(width              = int(w) if w.isdigit() else tsize('x'),
                                height             = int(h) if h.isdigit() else tsize('y'),
                                fps                = int(fps) if fps.isdigit() else 9,
