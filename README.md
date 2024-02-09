@@ -38,6 +38,8 @@ Installation parameters in Snake():
 
 `generate_new_apple`: Set whether an apple will appear or not every time the snake eats an apple [default: True].
 
+`set_pos_apple`: Set to adjust the alignment of the apple position [default: False].
+
 `game_over`: Set whether the game can be game over [default: True].
 
 `save_high_score`: Set save the highscore in the file "SNAKE-SCORE.hi" [default: True].
