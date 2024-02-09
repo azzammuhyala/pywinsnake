@@ -1,14 +1,15 @@
 """
 Copyright (C) 2024
-AzzamMuhyala - https://github.com/azzammuhyala
+pywinsnake - WinSnake game
+
+github: AzzamMuhyala - https://github.com/azzammuhyala
 """
 import os, random, time, math
 if os.name == 'nt':
     try:
         from asciiTUI import terminal_size as tsize
-        from asciiTUI import rgb
         from asciiTUI import remove_ansi as rmansi
-        from asciiTUI import justify
+        from asciiTUI import rgb, justify
         from keyboard import is_pressed as ispress
         from msvcrt import getch
     except Exception as e:
@@ -59,6 +60,7 @@ Installation parameters in Snake():
 `fps`: Set the frames per second (FPS) as well as set the speed of the snake [default: 9].
 `lots_of_apples`: Regulate how many apples there are in the game [default: 20].
 `generate_new_apple`: Set whether an apple will appear or not every time the snake eats an apple [default: True].
+`set_pos_apple`: Set to adjust the alignment of the apple position [default: False].
 `game_over`: Set whether the game can be game over [default: True].
 `save_high_score`: Set save the highscore in the file "SNAKE-SCORE.hi" [default: True].
 `show_score_board`: Set to display the scoreboard [default: True].
@@ -79,7 +81,7 @@ Exit Codes
 -2: Not yet installed the required packages
 -1: If the OS used is other than Windows.
 0: Exit the game (pressing Q).
-1: Force quit the game (pressing Ctrl + (C or D)).
+1: Force quit the game (pressing Ctrl + (C or Z)).
 ~: Orders.
     """
     def __init__(self,
@@ -89,6 +91,7 @@ Exit Codes
                 lots_of_apples    :int  = 20,
                 len_snake         :int  = 1,
                 generate_new_apple:bool = True,
+                set_pos_apple     :bool = False,
                 game_over         :bool = True,
                 save_high_score   :bool = True,
                 show_score_board  :bool = True,
@@ -100,8 +103,9 @@ Exit Codes
             raise TypeError('Type arguments (width:{}, height:{}, fps:{}, lots_of_apples:{}, len_snake:{}) are all not int'.format(
                 type(width).__name__, type(height).__name__, type(fps).__name__, type(lots_of_apples).__name__, type(len_snake).__name__
             ))
-        if (250 > width < 60) or (100 > height < 20) or (90 > fps < 2) or (1150 > lots_of_apples < 1) or (width*height-5 > len_snake < 1):
-            raise ValueError(f'The value given is out of bounds.\nMIN, MAX:\n  width: 60, 250 - [got {width}]\n  height: 20, 100 - [got {height}]\n  fps: 2, 90 - [got {fps}]\n  lots_of_apples: 1, 1150 - [got {lots_of_apples}]\n  len_snake: 1, {width*height-5} - [got {len_snake}]')
+        maxradius = (width-2) * (height-(4 if show_score_board else 3)) - 10
+        if (258 < width) or (width < 50) or (128 < height) or (height < 15) or (120 < fps) or (fps < 2) or (maxradius < lots_of_apples) or (lots_of_apples < 1) or (maxradius < len_snake) or (len_snake < 1):
+            raise ValueError(f'The value given is out of bounds.\nMIN, MAX:\n  width: 50, 258 - [got {width}]\n  height: 15, 128 - [got {height}]\n  fps: 2, 120 - [got {fps}]\n  lots_of_apples: 1, {maxradius} - [got {lots_of_apples}]\n  len_snake: 1, {maxradius} - [got {len_snake}]')
         if not bot_move_type in ('neat', 'algorithm'):
             raise TypeError(f"No bot mode with type '{bot_move_type}'!")
         if not bot_move_info_type in ('wasd', 'ulds'):
@@ -113,6 +117,7 @@ Exit Codes
         self.LOA = lots_of_apples # the number of apples in the game
         self.LS = len_snake # snake length for the first time
         self.GNA = bool(generate_new_apple) # produces a new apple every time you eat one if the value is True
+        self.SPA = bool(set_pos_apple) # adjusts the alignment of the apple's position if the value is True
         self.GO = bool(game_over) # showing game over if the value is True
         self.SHC = bool(save_high_score) # saves the highscore if the value is True
         self.SSB = bool(show_score_board) # display scoreboard setting
@@ -120,12 +125,14 @@ Exit Codes
         self.BMT = bot_move_type # types bot moving
         self.BMIT = bot_move_info_type # bot move info display type
 
-        # this function is used to set the size of the coordinates which can change depending on the value of self.SSB
-        self._SSBs = lambda SSB_T, SSB_F: SSB_T if self.SSB else SSB_F
-
         self.exit_code = 0
         self.running = True
         self.ASCII = [f'{rgb(0,200,255)}$\033[0m', f'{rgb(0,200,0)}#\033[0m', f'{rgb(200,0,0)}@\033[0m', ' '] # ascii characters on snake board
+        # check length and type of self.ASCII
+        if len(self.ASCII) != 4: raise ValueError(f'Requires at least 4 characters in the ASCII attribute, not {len(self.ASCII)}')
+        if not isinstance(self.ASCII, list): raise TypeError(f'ASCII attribute type is list, not {type(self.ASCII).__name__}')
+        for char in self.ASCII:
+            if len(rmansi(char)) != 1: raise ValueError(f'Requires at least 1 ASCII character, not {len(rmansi(char))}')
         self._message_exit = '' # showing messages exit
         self._botMovesInfo = {'w': 'Up', 'a': 'Left', 's': 'Down', 'd': 'Right', '': 'Stop'}
         self._game_over = False # Declares whether it is game over or not
@@ -142,12 +149,20 @@ Exit Codes
         self._lenSnake = len_snake
         self._rmCountApple = 0
         self._hiScore = self._highscore() if self.SHC else '-'
-        self._posApples = [self._rdmPosApples() for _ in range(self.LOA)] # apple coordinate data section
+         # apple coordinate data section
+        self._posApples = []
+        if self.SPA:
+            print('Create random coordinates...')
+        self._rdmPosApples(showStatus=True)
         self._getRealTime = '-' # get the delay time and convert it to FPS in real time
         self._getDelayFPS = time.time()
 
     def cls(self) -> None:
         os.system('cls') # This function is used to clean the screen
+
+    def _SSBs(self, SSB_T, SSB_F) -> object:
+        # this function is used to set the size of the coordinates which can change depending on the value of self.SSB
+        return SSB_T if self.SSB else SSB_F
 
     def _sleepFPS(self) -> None:
         # Sleep time in FPS form
@@ -161,21 +176,38 @@ Exit Codes
         # This function is used to get or change the highest score value in the SNAKE-SCORE.hi file
         try:
             with open('SNAKE-SCORE.hi', 'r+', encoding='utf8') as hi:
-                if new_hi_score == None:
-                    score = hi.read()
-                else:
-                    hi.write(new_hi_score)
+                if new_hi_score == None: score = hi.read()
+                else: hi.write(new_hi_score)
             return int(score) if score.isdigit() else self._highscore(0)
         except:
             try:
-                with open('SNAKE-SCORE.hi', 'w', encoding='utf8') as hie:
-                    hie.write(str(new_hi_score))
+                with open('SNAKE-SCORE.hi', 'w', encoding='utf8') as hie: hie.write(str(new_hi_score))
             finally:
                 return new_hi_score
 
-    def _rdmPosApples(self) -> tuple[int]:
+    def _rdmPosApples(self, generated=True, showStatus=False) -> None:
         # This function is used to provide random coordinates of where the apple is located
-        return (random.randint(1, self.WIDTH-2), random.randint(1, self.HEIGHT-self._SSBs(4, 3)))
+        i = 0
+        rdmpos = lambda: (random.randint(1, self.WIDTH-2), random.randint(1, self.HEIGHT-self._SSBs(4, 3)))
+        if self.SPA:
+            while i < self.LOA:
+                a = rdmpos()
+                if a in self._posApples:
+                    if showStatus: print(f'{len(self._posApples)}/{self.LOA} apples left ', end='\r')
+                    continue
+                else:
+                    if generated:
+                        i += 1
+                        self._posApples.append(a)
+                    else:
+                        self._posApples.append(a)
+                        break
+        elif not self.SPA:
+            if generated:
+                for _ in range(self.LOA):
+                    self._posApples.append(rdmpos())
+            else:
+                self._posApples.append(rdmpos())
 
     def _showQuit(self) -> None:
         # displays or asks if you want to exit the game
@@ -200,31 +232,39 @@ Exit Codes
             print(f"\n(Enter 'c' to continue) \033[31mGAME OVER\033[0m - \033[33m{message}\033[0m...", end='')
         showinfo()
         while True:
-            game_over_user = getch().decode('utf-8').lower()
-            match game_over_user:
-                case 'c':
-                    self._snakeList.clear()
-                    self._posX_snake, self._posY_snake, self._deltaX, self._deltaY, self._lenSnake, self._posApples, self._moveSnake = (self.WIDTH-2) // 2, (self.HEIGHT-self._SSBs(4, 3)) // 2, 0, 0, self.LS, [self._rdmPosApples() for _ in range(self.LOA)], ''
-                    self._game_over = False
-                    break
-                case 'q':
-                    self._showQuit()
-                    if self.running == False: break
-                    else: showinfo()
+            game_over_user = ord(getch())
+            if game_over_user in (99, 67):
+                # reset all
+                self._snakeList.clear()
+                self._posApples.clear()
+                self._posX_snake, self._posY_snake, self._deltaX, self._deltaY, self._rmCountApple, self._lenSnake, self._moveSnake = (self.WIDTH-2)//2, (self.HEIGHT-self._SSBs(4, 3))//2, 0, 0, 0, self.LS, ''
+                if self.SPA:
+                    print('\nCreate random coordinates...')
+                self._rdmPosApples(showStatus=True)
+                self._game_over = False
+                break
+            elif game_over_user in (113, 81):
+                self._showQuit()
+                if not self.running: break
+                else: showinfo()
 
     def _showDisplay(self, showControl:bool=True) -> None:
         # Displays the score bar and snake board on the screen
-        lensnk, fps, loa, hiscr, ct_appl = map(str, [self._lenSnake-1, self.FPS, self.LOA-self._rmCountApple, self._hiScore, len(list(set(self._posApples)))])
+        lensnk, fps, loa, hiscr, ct_appl = map(str, [self._lenSnake-1, self.FPS, self.LOA-self._rmCountApple, self._hiScore, len(set(self._posApples))])
         hiscr = '-' if hiscr == 'False' else hiscr
         real_fps = f'{1/(time.time()-self._getRealTime):.1f}' if isinstance(self._getRealTime, (int, float)) else '-'
+        showSM = {
+            'w': ('\033[32mw\033[0m' if self._moveSnake=='w' else 'w'),
+            'a': ('\033[32ma\033[0m' if self._moveSnake=='a' else 'a'),
+            's': ('\033[32ms\033[0m' if self._moveSnake=='s' else 's'),
+            'd': ('\033[32md\033[0m' if self._moveSnake=='d' else 'd'),
+        }
         print(
-            (rgb()+'SCORE: '+rgb(20,225,100)+lensnk+rgb()
-            +'  FPS: '+rgb(127,127,127)+f'{real_fps}/{fps}'+rgb()
-            +'  APPLES: '+rgb(200,0,0)+f'{ct_appl}/{loa}'+rgb()
-            +' '*(self.WIDTH-36-len(ct_appl+lensnk+fps+loa+hiscr+real_fps))
-            +'HI SCORE: '+rgb(225,100,20)+hiscr+'\033[0m\n' if self.SSB else '')
+            (f'{rgb()}SCORE: {rgb(20,225,100)+lensnk+rgb()}/{rgb(225,100,20)+hiscr+rgb()}'
+            +f'  FPS: {rgb(127,127,127)+real_fps}/{fps+rgb()}'
+            +f'  APPLES: {rgb(200,0,0)+ct_appl}/{loa+rgb()}\n' if self.SSB else '')
             +'\n'.join([row for row in self._ASCII_DISPLAY])
-            +('\n'+justify(f"{'[w]:\033[35mUp\033[0m  [s]:\033[35mDown\033[0m  [a]:\033[35mLeft\033[0m  [d]:\033[35mRight\033[0m' if not self.BM else f'Bot move: [\033[32m{self._moveSnake if self.BMIT == 'wasd' else self._botMovesInfo[self._moveSnake]}\033[0m]'}  [p]:\033[35mPause\033[0m  [q]:\033[35mQuit\033[0m", self.WIDTH, wrap=False) if self.SSB and showControl else '')
+            +('\n'+justify(f"{('[{}]:\033[35mUp\033[0m  [{}]:\033[35mDown\033[0m  [{}]:\033[35mLeft\033[0m  [{}]:\033[35mRight\033[0m'.format(showSM['w'],showSM['s'],showSM['a'],showSM['d']) if self.WIDTH >= 60 else '[{}{}{}{}]: \033[35mMoves Snake\033[0m'.format(showSM['w'],showSM['a'],showSM['s'],showSM['d'])) if not self.BM else f'Bot move: [\033[32m{self._moveSnake if self.BMIT == 'wasd' else self._botMovesInfo[self._moveSnake]}\033[0m]'}  [p]:\033[35mPause\033[0m  [q]:\033[35mQuit\033[0m", self.WIDTH, wrap=False) if self.SSB and showControl else '')
         ,end='')
 
     def _move_event(self) -> None:
@@ -246,20 +286,19 @@ Exit Codes
             showinfo()
             # pause loop
             while True:
-                pause_user = getch().decode('utf-8').lower()
-                match pause_user:
-                    case 'c':
-                        self._moveSnake = ''
-                        break
-                    case 'q':
-                        self._showQuit()
-                        if self.running == False: break
-                        else: showinfo()
+                pause_user = ord(getch())
+                if pause_user in (99, 67):
+                    self._moveSnake = ''
+                    break
+                elif pause_user in (113, 81):
+                    self._showQuit()
+                    if not self.running: break
+                    else: showinfo()
 
         elif ispress('q'):
             self._showQuit()
 
-    def _play_bot(self):
+    def _play_bot(self) -> None:
         """ BOT algorithm for playing snake """
         if self.GO:
             # Algorithm for game over mode
@@ -270,7 +309,7 @@ Exit Codes
             self._message_exit = errmes
 
         else:
-            # Algorithm for no game over mode
+            # Algorithm for non-game over mode
             def find_nearest_apple() -> tuple[int]:
                 """ Find the nearest apple coordinates using Euclidean distance """
                 min_distance = float('inf')
@@ -289,8 +328,7 @@ Exit Codes
                         if self._posX_snake == self.WIDTH-2:
                             if self._moveSnake == 'w': self._moveSnake = 'd'
                             else: self._moveSnake = 'w'
-                    else:
-                        self._moveSnake = ''
+                    else: self._moveSnake = ''
 
                 case 'algorithm':
                     near_apple = find_nearest_apple()
@@ -299,18 +337,9 @@ Exit Codes
                         elif near_apple[0] > self._posX_snake: self._moveSnake = 'd'
                         elif near_apple[1] < self._posY_snake: self._moveSnake = 'w'
                         elif near_apple[1] > self._posY_snake: self._moveSnake = 's'
-                    else:
-                        self._moveSnake = ''
+                    else: self._moveSnake = ''
 
     def play(self) -> int:
-        # check length and type of self.ASCII
-        if len(self.ASCII) != 4:
-            raise ValueError(f'Requires at least 4 characters in the ASCII attribute, not {len(self.ASCII)}')
-        if not isinstance(self.ASCII, list):
-            raise TypeError(f'ASCII attribute type is list, not {type(self.ASCII).__name__}')
-        for char in self.ASCII:
-            if len(rmansi(char)) != 1:
-                raise ValueError(f'Requires at least 1 ASCII character, not {len(rmansi(char))}')
         # changes all value on self.ASCII to str
         self.ASCII = [str(char) for char in self.ASCII]
         # title
@@ -320,20 +349,21 @@ Exit Codes
                 self._getDelayFPS = time.time()
                 # delete the position of the apple that was in the snake the first time it was there
                 if self._lenSnake == 1 and self.GO:
-                    for _ in range(self._posApples.count(((self.WIDTH-2) // 2, (self.HEIGHT-self._SSBs(3, 2)) // 2))):
+                    poscenter = ((self.WIDTH-2) // 2, (self.HEIGHT-self._SSBs(3, 2)) // 2)
+                    for _ in range(self._posApples.count(poscenter)):
                         self._rmCountApple += 1
-                        self._posApples.remove(((self.WIDTH-2) // 2, (self.HEIGHT-self._SSBs(3, 2)) // 2))
+                        self._posApples.remove(poscenter)
                 # Check whether the position of the snake is the same as the position of one of the apples. If so, it will delete the coordinates of the apple eaten by the snake and add 1 apple randomly if self.GNA is True value..
                 if (self._posX_snake, self._posY_snake) in self._posApples:
                     self._posApples.remove((self._posX_snake, self._posY_snake))
                     if self.GNA:
-                        self._posApples.append(self._rdmPosApples())
+                        self._rdmPosApples(generated=False)
                     self._lenSnake += 1
 
                 self._posX_snake += self._deltaX
                 self._posY_snake += self._deltaY
                 # check whether the position of the snake is outside the limits of the snake board. If yes then game over
-                if self._posX_snake < 0 or self._posX_snake > self.WIDTH-1 or self._posY_snake < 0 or self._posY_snake > self.HEIGHT-self._SSBs(4, 3):
+                if self._posX_snake < 0 or self._posX_snake > self.WIDTH-1 or self._posY_snake < 0 or self._posY_snake > self.HEIGHT-self._SSBs(3, 2):
                     if not self.GO:
                         self._posX_snake = (self._posX_snake + self.WIDTH) % (self.WIDTH)
                         self._posY_snake = (self._posY_snake + self.HEIGHT-self._SSBs(2, 1)) % (self.HEIGHT-self._SSBs(2, 1))
@@ -351,6 +381,7 @@ Exit Codes
                 # Snake board rendering process
                 for row in range(self.HEIGHT-self._SSBs(2, 1)):
                     colchard = ''
+                    he = self.HEIGHT-self._SSBs(3, 2)
                     for col in range(self.WIDTH):
                         coordinat = (col, row)
                         if coordinat in self._snakeList:
@@ -361,28 +392,26 @@ Exit Codes
                             colchard += '\u250f'
                         elif coordinat == (self.WIDTH-1, 0):
                             colchard += '\u2513'
-                        elif coordinat == (0, self.HEIGHT-self._SSBs(3, 2)):
+                        elif coordinat == (0, he):
                             colchard += '\u2517'
-                        elif coordinat == (self.WIDTH-1, self.HEIGHT-self._SSBs(3, 2)):
+                        elif coordinat == (self.WIDTH-1, he):
                             colchard += '\u251b'
                         elif coordinat in [(0, row), (self.WIDTH-1, row)]:
                             colchard += '\u2503'
-                        elif coordinat in [(col, 0), (col, self.HEIGHT-self._SSBs(3, 2))]:
+                        elif coordinat in [(col, 0), (col, he)]:
                             colchard += '\u2501'
                         else:
                             colchard += self.ASCII[3]
                     self._ASCII_DISPLAY.append(colchard)
-                # update high score
                 if self.SHC:
+                    # update high score
                     self._hiScore = self._highscore()
+                    # Checks whether the score is greater than the high score
+                    if (self._hiScore if isinstance(self._hiScore, int) else 0) < self._lenSnake-1:
+                        self._hiScore = self._highscore(self._lenSnake-1)
                 # check whether the snake's position hits any part of the snake's body. If yes then game over
                 if snakeHead in self._snakeList[:-1] and len(self._snakeList) > self.LS and self.GO:
                     self._showGameOver("CRASHING")
-                # Checks whether the score is greater than the high score
-                hiscore = self._highscore()
-                if (hiscore if hiscore != None else 0) < self._lenSnake-1 and self.SHC:
-                    self._hiScore = self._highscore(self._lenSnake-1)
-                del hiscore
                 # TUI display and control section
                 self.cls()
                 self._showDisplay()
@@ -404,16 +433,17 @@ Exit Codes
                 self._message_exit = 'You pressing Ctrl + (C or Z)..'
                 self.running = False
         self.cls()
-        print('\033[0mExit - Exit code: \033[33m{}\033[0m\nWinSnake: \033[36m{}\033[0m'.format(self.exit_code, self._message_exit))
+        if "WINSNAKE_HIDE_EXIT_INFO" not in os.environ:
+            print('\033[0mExit - Exit code: \033[33m{}\033[0m\nWinSnake: \033[36m{}\033[0m'.format(self.exit_code, self._message_exit))
         return self.exit_code
 
 if __name__ == '__main__':
     os.system('cls')
     while True:
         print(
-            "=" * 60
-            +"\n\033[36mWin\033[32mSn\033[31ma\033[32mke\033[0m Game!\n"+
-            "=" * 60
+            "=" * 50
+            +'\n'+justify("\033[36mWin\033[32mSn\033[31ma\033[32mke\033[0m Game!", 50, wrap=False)+'\n'+
+            "=" * 50
         )
         try:
             w    = input('Width               (\033[32mint\033[0m): ')
@@ -422,6 +452,7 @@ if __name__ == '__main__':
             loa  = input('Many lots of apples (\033[32mint\033[0m): ')
             ls   = input('Length snake        (\033[32mint\033[0m): ')
             gna  = input('Generate new apple (\033[32mbool\033[0m): ')
+            spa  = input('Set pos apple      (\033[32mbool\033[0m): ')
             go   = input('Game over mode     (\033[32mbool\033[0m): ')
             shc  = input('Save hight score   (\033[32mbool\033[0m): ')
             ssb  = input('Show score board   (\033[32mbool\033[0m): ')
@@ -437,6 +468,7 @@ if __name__ == '__main__':
                                lots_of_apples     = int(loa) if loa.isdigit() else 20,
                                len_snake          = int(ls) if ls.isdigit() else 1,
                                generate_new_apple = gna,
+                               set_pos_apple      = spa,
                                game_over          = go,
                                save_high_score    = shc,
                                show_score_board   = ssb,
@@ -449,15 +481,16 @@ if __name__ == '__main__':
                                                        .replace('2', 'algorithm') if bmt in ('1', '2') else 'neat'
                             )
             game_snake.play()
-            del w, h, fps, loa, gna, go, shc, ssb, bm, bmt, game_snake
+            del w, h, fps, loa, gna, spa, go, shc, ssb, bm, bmt, game_snake
         except (KeyboardInterrupt, EOFError):
             print('\n\033[33mExit [Any] or Reset config [R]...\033[0m',end='')
-            keyexit = getch().decode('utf-8').lower()
-            if keyexit == 'r':
-                print()
+            keyexit = ord(getch())
+            if keyexit in (114, 82):
+                print('\n')
                 continue
-            del keyexit
-            exit()
+            else:
+                del keyexit
+                break
         except Exception as e:
             print(f"\n\033[31m{type(e).__name__}\033[0m: {e}")
             del e
